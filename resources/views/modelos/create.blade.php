@@ -45,6 +45,8 @@
         </select>
     </div>
 
+    @include('modelos._foto')
+
     <button type="submit" class="btn btn-primary">Guardar</button>
     <a href="{{ route('modelos.index') }}" class="btn btn-secondary">Cancelar</a>
 </form></div>

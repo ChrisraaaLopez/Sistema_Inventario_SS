@@ -45,6 +45,16 @@
         </select>
     </div>
 
+    @if($modelo->URL_Imagen)
+        <div class="mb-3">
+            <label class="form-label d-block">Imagen actual:</label>
+            <img src="{{ Storage::url($modelo->URL_Imagen) }}" width="140" class="img-thumbnail">
+            <small class="d-block text-muted mt-2">Si no eliges una imagen nueva, se conserva la actual.</small>
+        </div>
+    @endif
+
+    @include('modelos._foto')
+
     <button type="submit" class="btn btn-primary">Actualizar</button>
     <a href="{{ route('modelos.index') }}" class="btn btn-secondary">Cancelar</a>
 </form></div>
