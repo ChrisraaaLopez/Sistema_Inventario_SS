@@ -1,7 +1,7 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><title>Resguardo {{$resguardo->Id_Resguardo}}</title><style>
 *{box-sizing:border-box}
 body{font-family:Arial,sans-serif;margin:32px;color:#172033;background:#eef1f5}
-.print-bar{position:sticky;top:0;display:flex;justify-content:flex-end;padding:12px 0;margin-bottom:16px}
+.print-bar{position:sticky;top:0;display:flex;justify-content:space-between;padding:12px 0;margin-bottom:16px}
 .btn-print{display:inline-flex;align-items:center;gap:8px;background:#172033;color:#fff;border:none;border-radius:8px;padding:12px 20px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15);transition:background .15s ease,transform .1s ease}
 .btn-print:hover{background:#2a3a5c}
 .btn-print:active{transform:scale(.97)}
@@ -25,6 +25,9 @@ th{background:#eef1f5}
 </style></head><body>
 
 <div class="print-bar no-print">
+  <a class="btn-print" style="background:#2a3a5c;text-decoration:none" href="{{ route('revision.select', $resguardo->FkId_Periodo) }}">
+    ← Revisar otra ubicación de este periodo
+  </a>
   <button class="btn-print" onclick="window.print()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
     Imprimir / Guardar PDF

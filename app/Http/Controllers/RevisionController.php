@@ -4,9 +4,34 @@ use App\Models\Articulo; use App\Models\Empleado; use App\Models\Periodo; use Ap
 class RevisionController extends Controller {
  public function periodos(){ $periodos=Periodo::withCount('resguardos')->orderByDesc('Id_Periodo')->paginate(15); return view('periodos.index',compact('periodos')); }
  public function crearPeriodo(){ return view('periodos.create'); }
- public function guardarPeriodo(Request $r){ $d=$r->validate(['Nombre'=>'required|string|max:50','Fecha_Inicio'=>'required|date']); Periodo::create($d+['Estado'=>'Abierto','status'=>'activo','Estatus'=>'Activo']); return redirect()->route('revision.periodos')->with('ok','Periodo creado correctamente.'); }
- public function seleccionar($periodo){ $periodo=Periodo::findOrFail($periodo); abort_if($periodo->Estado==='Cerrado',403,'El periodo está cerrado.'); $ubicaciones=Ubicacion::where(function($q){$q->where('status','activo')->orWhere(fn($n)=>$n->whereNull('status')->where('Estatus','Activo'));})->orderBy('Edificio')->orderBy('Nombre')->get(); $empleados=Empleado::where(function($q){$q->where('status','activo')->orWhere(fn($n)=>$n->whereNull('status')->where('Estatus','Activo'));})->orderBy('Nombre')->get(); return view('revision.select',compact('periodo','ubicaciones','empleados')); }
- public function iniciar(Request $r,$periodo){ $periodo=Periodo::findOrFail($periodo); abort_if($periodo->Estado==='Cerrado',403,'El periodo está cerrado.'); $d=$r->validate(['FkId_Ubicacion'=>'required|exists:ubicaciones,Id_Ubicacion','FkId_Empleado'=>'required|exists:empleados,Id_Empleado']); $existing=Resguardo::where('FkId_Periodo',$periodo->Id_Periodo)->where('FkId_Ubicacion',$d['FkId_Ubicacion'])->where('FkId_Empleado',$d['FkId_Empleado'])->first(); if($existing){ if(!$existing->Cerrado){ return redirect()->route('revision.scan',$existing)->with('ok','Ya existe un resguardo abierto para esta ubicación y empleado.'); } return back()->withErrors(['FkId_Empleado'=>'Ya existe un resguardo cerrado para este periodo, ubicación y empleado.']); }
+ public function guardarPeriodo(Request $r){
+    $d=$r->validate([
+        'Nombre'=>'required|string|max:50|unique:periodos,Nombre',
+        'Fecha_Inicio'=>'required|date'
+    ],[
+        'Nombre.unique' => 'Ya existe un periodo con ese nombre, elige otro.'
+    ]);
+    Periodo::create($d+['Estado'=>'Abierto','status'=>'activo','Estatus'=>'Activo']);
+    return redirect()->route('revision.periodos')->with('ok','Periodo creado correctamente.');
+}
+
+public function seleccionar($periodo){
+    $periodo=Periodo::findOrFail($periodo);
+    abort_if($periodo->Estado==='Cerrado',403,'El periodo está cerrado.');
+
+    $ubicaciones=Ubicacion::where(function($q){$q->where('status','activo')->orWhere(fn($n)=>$n->whereNull('status')->where('Estatus','Activo'));})->orderBy('Edificio')->orderBy('Nombre')->get();
+    $empleados=Empleado::where(function($q){$q->where('status','activo')->orWhere(fn($n)=>$n->whereNull('status')->where('Estatus','Activo'));})->orderBy('Nombre')->get();
+
+    // Progreso: resguardos ya creados dentro de este periodo (abiertos o cerrados)
+    $resguardos = Resguardo::where('FkId_Periodo', $periodo->Id_Periodo)
+        ->with(['ubicacion', 'empleado'])
+        ->get();
+
+    $ubicacionesCubiertas = $resguardos->pluck('FkId_Ubicacion')->unique();
+    $ubicacionesPendientes = $ubicaciones->whereNotIn('Id_Ubicacion', $ubicacionesCubiertas);
+
+    return view('revision.select', compact('periodo','ubicaciones','empleados','resguardos','ubicacionesPendientes'));
+}public function iniciar(Request $r,$periodo){ $periodo=Periodo::findOrFail($periodo); abort_if($periodo->Estado==='Cerrado',403,'El periodo está cerrado.'); $d=$r->validate(['FkId_Ubicacion'=>'required|exists:ubicaciones,Id_Ubicacion','FkId_Empleado'=>'required|exists:empleados,Id_Empleado']); $existing=Resguardo::where('FkId_Periodo',$periodo->Id_Periodo)->where('FkId_Ubicacion',$d['FkId_Ubicacion'])->where('FkId_Empleado',$d['FkId_Empleado'])->first(); if($existing){ if(!$existing->Cerrado){ return redirect()->route('revision.scan',$existing)->with('ok','Ya existe un resguardo abierto para esta ubicación y empleado.'); } return back()->withErrors(['FkId_Empleado'=>'Ya existe un resguardo cerrado para este periodo, ubicación y empleado.']); }
  $articulos=Articulo::where('FkId_Ubicacion',$d['FkId_Ubicacion'])->where('FkId_Empleado',$d['FkId_Empleado'])->where(function($q){$q->where('status','activo')->orWhere(fn($n)=>$n->whereNull('status')->where('Estatus','Activo'));})->get(); if($articulos->isEmpty()){ return back()->withErrors(['FkId_Empleado'=>'No hay artículos activos asignados a este empleado en la ubicación elegida.']); }
  $res=Resguardo::create($d+['FkId_Periodo'=>$periodo->Id_Periodo,'Fecha_Firma'=>now()->toDateString()]); foreach($articulos as $a){ ResguardoArticulo::updateOrCreate(['FkId_Resguardo'=>$res->Id_Resguardo,'FkId_Articulo'=>$a->Id_Articulo],['FkId_Ubicacion'=>$a->FkId_Ubicacion,'Revisado'=>false,'Fecha_Revision'=>null,'Comentarios'=>null]); } return redirect()->route('revision.scan',$res); }
  public function scan(Resguardo $resguardo){ $resguardo->load(['periodo','empleado','ubicacion']); abort_if($resguardo->Cerrado || $resguardo->periodo->Estado==='Cerrado',403,'La revisión está cerrada.'); $items=$resguardo->articulos()->with(['articulo.modelo','articulo.marca','articulo.ubicacion'])->orderBy('Revisado')->get(); return view('revision.scan',compact('resguardo','items')); }
