@@ -46,6 +46,44 @@ class ArticuloController extends Controller
         return view('articulos.create', $this->catalogos());
     }
 
+    public function generarCodigo()
+    {
+        $maxNumero = 0;
+        $registros = DB::table('articulos')->select('Codigo_Barras')->get();
+
+        foreach ($registros as $registro) {
+            if (!is_string($registro->Codigo_Barras)) {
+                continue;
+            }
+
+            if (preg_match('/^INV-([0-9]{1,8})$/', $registro->Codigo_Barras, $coincidencia)) {
+                $maxNumero = max($maxNumero, (int) $coincidencia[1]);
+            }
+        }
+
+        $intento = $maxNumero + 1;
+        $limite = 1000;
+
+        for ($i = 0; $i < $limite; $i++) {
+            $codigo = 'INV-' . str_pad((string) $intento, 6, '0', STR_PAD_LEFT);
+
+            $existe = DB::table('articulos')
+                ->where('Codigo_Barras', $codigo)
+                ->orWhere('N_Serie', $codigo)
+                ->exists();
+
+            if (!$existe) {
+                return response()->json(['codigo' => $codigo]);
+            }
+
+            $intento++;
+        }
+
+        return response()->json([
+            'message' => 'No se pudo generar un código único después de 1000 intentos.',
+        ], 500);
+    }
+
     public function store(Request $request)
     {
         $request->validate([
@@ -68,6 +106,7 @@ class ArticuloController extends Controller
         ], [
             'FkId_Modelo.exists' => 'La marca seleccionada no coincide con el modelo elegido.',
             'FkId_Tipo.exists' => 'La categoría seleccionada no coincide con el tipo elegido.',
+            'Codigo_Barras.unique' => 'Ese código ya está registrado en otro artículo.',
         ]);
 
         $data = $request->only(
@@ -126,6 +165,7 @@ class ArticuloController extends Controller
         ], [
             'FkId_Modelo.exists' => 'La marca seleccionada no coincide con el modelo elegido.',
             'FkId_Tipo.exists' => 'La categoría seleccionada no coincide con el tipo elegido.',
+            'Codigo_Barras.unique' => 'Ese código ya está registrado en otro artículo.',
         ]);
 
         $data = $request->only(

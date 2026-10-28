@@ -356,7 +356,29 @@ document.getElementById('guardarFacturaRapida')?.addEventListener('click',async 
 <script>
 (function(){const input=document.getElementById('Codigo_Barras');if(!input)return;const barcode=document.getElementById('barcodePreview'),qr=document.getElementById('qrPreview');
 function draw(){const val=input.value.trim();barcode.innerHTML='';qr.innerHTML='';if(!val)return;if(window.JsBarcode){try{JsBarcode(barcode,val,{format:'CODE128',displayValue:true,fontSize:14,margin:8});}catch(e){barcode.innerHTML='';}}if(window.QRCode)new QRCode(qr,{text:val,width:150,height:150,correctLevel:QRCode.CorrectLevel.M});}
-input.addEventListener('input',draw);document.getElementById('generateCode')?.addEventListener('click',()=>{if(!input.value.trim())input.value='INV-'+Date.now().toString().slice(-10);draw();});document.getElementById('printLabels')?.addEventListener('click',()=>{draw();const val=input.value.trim();if(!val){alert('Escribe o genera primero un código.');return;}const area=document.getElementById('printLabelsArea');area.innerHTML='<div class="print-label"><strong>ETIQUETA DE INVENTARIO</strong><svg id="printBarcode"></svg><div style="font-size:12px;word-break:break-all">'+val.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</div><div id="printQr"></div></div>';area.style.display='flex';try{JsBarcode(document.getElementById('printBarcode'),val,{format:'CODE128',displayValue:false,margin:5});}catch(e){}new QRCode(document.getElementById('printQr'),{text:val,width:100,height:100});setTimeout(()=>{window.print();area.style.display='none';},300);});draw();})();
+input.addEventListener('input',draw);document.getElementById('generateCode')?.addEventListener('click', async () => {
+    const button = document.getElementById('generateCode');
+    if (!button || input.value.trim()) return;
+
+    button.disabled = true;
+    try {
+        const response = await fetch('{{ route('articulos.generar-codigo') }}', {
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.codigo) {
+            throw new Error('No se pudo generar el código.');
+        }
+
+        input.value = data.codigo;
+        draw();
+    } catch (error) {
+        alert('No se pudo generar el código. Intenta de nuevo.');
+    } finally {
+        button.disabled = false;
+    }
+});
+document.getElementById('printLabels')?.addEventListener('click',()=>{draw();const val=input.value.trim();if(!val){alert('Escribe o genera primero un código.');return;}const area=document.getElementById('printLabelsArea');area.innerHTML='<div class="print-label"><strong>ETIQUETA DE INVENTARIO</strong><svg id="printBarcode"></svg><div style="font-size:12px;word-break:break-all">'+val.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</div><div id="printQr"></div></div>';area.style.display='flex';try{JsBarcode(document.getElementById('printBarcode'),val,{format:'CODE128',displayValue:false,margin:5});}catch(e){}new QRCode(document.getElementById('printQr'),{text:val,width:100,height:100});setTimeout(()=>{window.print();area.style.display='none';},300);});draw();})();
 </script>
 
 @endsection

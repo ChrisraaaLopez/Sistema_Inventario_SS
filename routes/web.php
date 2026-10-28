@@ -41,6 +41,7 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('rol:Administrador')->group(function () {
+        Route::get('/articulos/generar-codigo', [ArticuloController::class, 'generarCodigo'])->name('articulos.generar-codigo');
         Route::post('/marcas/rapida', [MarcaController::class, 'quickStore'])->name('marcas.quick-store');
         Route::post('/modelos/rapido', [ModeloController::class, 'quickStore'])->name('modelos.quick-store');
         Route::post('/facturas/rapida', [FacturaController::class, 'quickStore'])->name('facturas.quick-store');

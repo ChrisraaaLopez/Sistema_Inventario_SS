@@ -5,14 +5,17 @@ namespace Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\IniciaSesion;
 use Tests\TestCase;
 
 class ArticuloImageUploadTest extends TestCase
 {
     use RefreshDatabase;
+    use IniciaSesion;
 
     public function test_it_can_upload_an_image_for_an_article(): void
     {
+        $this->iniciarSesion();
         Storage::fake('public');
 
         $areaId = \DB::table('areas')->insertGetId([
@@ -97,6 +100,7 @@ class ArticuloImageUploadTest extends TestCase
 
     public function test_article_image_is_visible_in_the_articles_index(): void
     {
+        $this->iniciarSesion();
         Storage::fake('public');
 
         $areaId = \DB::table('areas')->insertGetId([
@@ -149,9 +153,10 @@ class ArticuloImageUploadTest extends TestCase
             'Estatus' => 'Activo',
         ]);
 
-        $path = \Illuminate\Support\Facades\Storage::disk('public')->put('articulos/test.jpg', 'test');
+        $path = 'articulos/test.jpg';
+        \Illuminate\Support\Facades\Storage::disk('public')->put($path, 'test');
 
-        \App\Models\Articulo::create([
+        $articulo = \App\Models\Articulo::create([
             'Descripcion' => 'Laptop con imagen',
             'FkId_Marca' => $marcaId,
             'FkId_Modelo' => $modeloId,
@@ -172,6 +177,7 @@ class ArticuloImageUploadTest extends TestCase
         $response = $this->get(route('articulos.index'));
 
         $response->assertOk();
-        $response->assertSee('/storage/' . $path);
+        // El listado sirve la imagen por una ruta autenticada (funciona sin symlink de storage).
+        $response->assertSee(route('articulos.imagen', $articulo), false);
     }
 }

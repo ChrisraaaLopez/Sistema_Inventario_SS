@@ -267,3 +267,5 @@ if (window.Html5Qrcode) {
 } else {
   show('warning', 'No se cargó el lector de cámara; usa la captura manual.');
 }
+</script>
+@endsection
