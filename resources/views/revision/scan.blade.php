@@ -255,13 +255,42 @@ if (window.Html5Qrcode) {
       Html5QrcodeSupportedFormats.UPC_A,
       Html5QrcodeSupportedFormats.UPC_E,
       Html5QrcodeSupportedFormats.ITF
-    ]
+    ],
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
   });
 
-  scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 280, height: 180 } }, (text) => {
-    scanner.pause(true);
-    lookup(text).finally(() => setTimeout(() => scanner.resume(), 1200));
-  }, () => {}).catch(() => {
+  const NO_DETECTION_TIMEOUT = 8000; // ms sin detectar nada antes de avisar
+  let noDetectionTimer = null;
+  let scanning = false;
+
+  function armNoDetectionTimer() {
+    clearTimeout(noDetectionTimer);
+    noDetectionTimer = setTimeout(() => {
+      if (scanning) {
+        show('warning', 'No se detecta ningún código. Acerca más el artículo a la cámara o mejora la iluminación.');
+        armNoDetectionTimer(); // sigue intentando y vuelve a avisar si pasa otra vez
+      }
+    }, NO_DETECTION_TIMEOUT);
+  }
+
+  scanner.start(
+    { facingMode: 'environment' },
+    { fps: 12, qrbox: { width: 300, height: 200 }, aspectRatio: 1.7777778 },
+    (text) => {
+      scanning = false;
+      clearTimeout(noDetectionTimer);
+      scanner.pause(true);
+      lookup(text).finally(() => setTimeout(() => {
+        scanner.resume();
+        scanning = true;
+        armNoDetectionTimer();
+      }, 1200));
+    },
+    () => {} // frame sin coincidencia: normal, se ignora
+  ).then(() => {
+    scanning = true;
+    armNoDetectionTimer();
+  }).catch(() => {
     show('warning', 'No se pudo abrir la cámara. Usa localhost o HTTPS y concede permiso.');
   });
 } else {
