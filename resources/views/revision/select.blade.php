@@ -7,61 +7,95 @@
 <div class="card-panel p-4 mb-4">
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h5 class="fw-bold mb-0">Progreso de este periodo</h5>
-    <span class="badge {{ $ubicacionesPendientes->isEmpty() ? 'bg-success' : 'bg-primary' }}">
-      {{ $ubicaciones->count() - $ubicacionesPendientes->count() }} de {{ $ubicaciones->count() }} ubicaciones cubiertas
-    </span>
+    <span class="badge {{ $resumen['pendientes']===0 ? 'bg-success' : 'bg-primary' }}">{{ $resumen['verificados'] }} de {{ $resumen['total'] }} artículos verificados</span>
   </div>
+  @php $pct = $resumen['total'] ? round($resumen['verificados']/$resumen['total']*100) : 0; @endphp
+  <div class="progress mb-3" style="height:10px"><div class="progress-bar {{ $pct===100?'bg-success':'' }}" style="width:{{ $pct }}%"></div></div>
 
-  @if($resguardos->isEmpty())
-    <p class="text-secondary mb-0">Todavía no se ha iniciado ninguna revisión dentro de este periodo.</p>
+  @if($resumen['pendientes']===0 && $resumen['abiertos']===0)
+    <div class="alert alert-success py-2"><i class="bi bi-check-circle-fill me-2"></i>Todos los artículos de todas las ubicaciones están verificados. Ya se puede cerrar el periodo.</div>
   @else
-    <div class="table-responsive mb-0">
-      <table class="table table-sm align-middle mb-0">
-        <thead>
-          <tr><th>Ubicación</th><th>Responsable</th><th>Estado</th><th></th></tr>
-        </thead>
-        <tbody>
-          @foreach($resguardos as $r)
-            <tr>
-              <td>{{ $r->ubicacion->Nombre }}</td>
-              <td>{{ $r->empleado->Nombre }} {{ $r->empleado->Apellido_Paterno }}</td>
-              <td>
-                @if($r->Cerrado)
-                  <span class="badge bg-success">Cerrado</span>
-                @else
-                  <span class="badge bg-warning text-dark">Abierto</span>
-                @endif
-              </td>
-              <td class="text-end">
-                @if($r->Cerrado)
-                  <a class="btn btn-sm btn-secondary" href="{{ route('resguardo.print',$r) }}">Ver resguardo</a>
-                @else
-                  <a class="btn btn-sm btn-primary" href="{{ route('revision.scan',$r) }}">Continuar escaneo</a>
-                @endif
-              </td>
-            </tr>
-          @endforeach
-        </tbody>
-      </table>
-    </div>
+    <div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle-fill me-2"></i>Faltan <strong>{{ $resumen['pendientes'] }}</strong> artículo(s) por verificar @if($resumen['abiertos']>0) y hay <strong>{{ $resumen['abiertos'] }}</strong> resguardo(s) abierto(s) @endif . El periodo no se podrá cerrar hasta completarlo.</div>
   @endif
 
-  @if($ubicacionesPendientes->isNotEmpty())
-    <hr class="my-3">
-    <div class="small text-secondary mb-1">Ubicaciones que aún faltan por revisar en este periodo:</div>
-    <div class="d-flex flex-wrap gap-2">
-      @foreach($ubicacionesPendientes as $u)
-        <span class="badge bg-light text-dark border">{{ $u->Nombre }} · Edificio {{ $u->Edificio }}</span>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Ubicación</th><th style="min-width:160px">Avance</th><th>Estado</th></tr></thead>
+      <tbody>
+      @foreach($ubicaciones as $u)
+        <tr>
+          <td>{{ $u->Nombre }} · Edificio {{ $u->Edificio }}</td>
+          <td>{{ $u->verificados }} / {{ $u->total }}</td>
+          <td>
+            @if($u->pendientes===0)<span class="badge bg-success">Verificada</span>
+            @elseif($u->verificados>0 || $u->abierto)<span class="badge bg-warning text-dark">En curso · faltan {{ $u->pendientes }}</span>
+            @else<span class="badge bg-secondary">Sin revisar</span>@endif
+          </td>
+        </tr>
       @endforeach
-    </div>
-  @else
+      </tbody>
+    </table>
+  </div>
+
+  @if($resguardos->isNotEmpty())
     <hr class="my-3">
-    <div class="alert alert-success mb-0 py-2"><i class="bi bi-check-circle-fill me-2"></i>Todas las ubicaciones de este periodo ya tienen una revisión iniciada.</div>
+    <div class="small text-secondary mb-2">Resguardos de este periodo:</div>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Ubicación</th><th>Responsable</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      @foreach($resguardos as $r)
+        <tr>
+          <td>{{ $r->ubicacion->Nombre }}</td>
+          <td>{{ $r->empleado->Nombre }} {{ $r->empleado->Apellido_Paterno }}</td>
+          <td>@if($r->Cerrado)<span class="badge bg-success">Cerrado</span>@else<span class="badge bg-warning text-dark">Abierto</span>@endif</td>
+          <td class="text-end">@if($r->Cerrado)<a class="btn btn-sm btn-secondary" href="{{ route('resguardo.print',$r) }}">Ver resguardo</a>@else<a class="btn btn-sm btn-primary" href="{{ route('revision.scan',$r) }}">Continuar escaneo</a>@endif</td>
+        </tr>
+      @endforeach
+      </tbody>
+    </table></div>
   @endif
 </div>
 
-<div class="card-form"><h4 class="fw-bold mb-1">Datos de la revisión</h4><p class="text-secondary mb-4">Los campos marcados with * son obligatorios.</p><form method="POST" action="{{ route('revision.start',$periodo) }}">@csrf
-<div class="mb-4"><label class="form-label" for="ubicacion">1. ¿Qué lugar vas a revisar? *</label><select id="ubicacion" class="form-select" name="FkId_Ubicacion" required><option value="">Selecciona edificio o ubicación</option>@foreach($ubicaciones as $u)<option value="{{ $u->Id_Ubicacion }}" @selected(old('FkId_Ubicacion')==$u->Id_Ubicacion)>{{ $u->Nombre }} · Edificio {{ $u->Edificio }} · Planta {{ $u->Planta }} @if(!$ubicacionesPendientes->contains('Id_Ubicacion', $u->Id_Ubicacion)) (ya tiene revisión) @endif</option>@endforeach</select><div class="form-text">Ejemplo: laboratorio, oficina, almacén o aula. Puedes elegir una ya cubierta si necesitas revisar otro empleado ahí.</div></div>
-<div class="mb-4"><label class="form-label" for="empleado">2. ¿Quién es el empleado responsable de estos artículos? *</label><select id="empleado" class="form-select" name="FkId_Empleado" required><option value="">Selecciona a la persona responsable</option>@foreach($empleados as $e)<option value="{{ $e->Id_Empleado }}" @selected(old('FkId_Empleado')==$e->Id_Empleado)>{{ $e->Nombre }} {{ $e->Apellido_Paterno }} · No. trabajador {{ $e->N_Trabajador }}</option>@endforeach</select><div class="form-text">Los artículos asignados a esta persona en la ubicación elegida se cargarán como los que debe tener a su cargo.</div></div>
-<div class="alert alert-info mt-0"><i class="bi bi-info-circle-fill me-2"></i>Al continuar se crea una revisión abierta. Podrás guardar el avance y cerrar el resguardo cuando termines.</div><div class="d-flex flex-wrap gap-2"><button class="btn btn-primary btn-lg"><i class="bi bi-clipboard-check me-2"></i>Cargar lista de artículos</button><a class="btn btn-secondary btn-lg" href="{{ route('revision.periodos') }}">Cancelar</a></div></form></div>
+<div class="card-form"><h4 class="fw-bold mb-1">Datos de la revisión</h4><p class="text-secondary mb-4">Los campos marcados con * son obligatorios.</p>
+@if($ubicaciones->isEmpty())
+  <div class="alert alert-info mb-0">No hay ubicaciones con artículos activos para revisar.</div>
+@else
+<form method="POST" action="{{ route('revision.start',$periodo) }}">@csrf
+<div class="mb-4"><label class="form-label" for="ubicacion">1. ¿Qué lugar vas a revisar? *</label>
+<select id="ubicacion" class="form-select" name="FkId_Ubicacion" required>
+  <option value="">Selecciona edificio o ubicación</option>
+  @foreach($ubicaciones as $u)
+    <option value="{{ $u->Id_Ubicacion }}" @selected(old('FkId_Ubicacion')==$u->Id_Ubicacion) @disabled($u->pendientes===0)>{{ $u->Nombre }} · Edificio {{ $u->Edificio }} · Planta {{ $u->Planta }} — {{ $u->pendientes===0 ? 'verificada' : $u->verificados.'/'.$u->total.' verificados' }}</option>
+  @endforeach
+</select>
+<div class="form-text">Solo aparecen ubicaciones que tienen artículos registrados. Las ya verificadas completas se muestran deshabilitadas.</div></div>
+<div class="mb-4"><label class="form-label" for="empleado">2. ¿Quién es el empleado responsable de estos artículos? *</label>
+<select id="empleado" class="form-select" name="FkId_Empleado" required disabled><option value="">Primero elige una ubicación</option></select>
+<div class="form-text">Solo aparecen las personas que tienen resguardo de artículos en la ubicación elegida.</div></div>
+<div class="alert alert-info mt-0"><i class="bi bi-info-circle-fill me-2"></i>Al continuar se crea una revisión abierta. Podrás guardar el avance y cerrar el resguardo cuando termines.</div><div class="d-flex flex-wrap gap-2"><button class="btn btn-primary btn-lg"><i class="bi bi-clipboard-check me-2"></i>Cargar lista de artículos</button><a class="btn btn-secondary btn-lg" href="{{ route('revision.periodos') }}">Cancelar</a></div></form>
+<script>
+(function(){
+  const data=@json($empleadosPorUbicacion);
+  const oldEmp='{{ old('FkId_Empleado') }}';
+  const ub=document.getElementById('ubicacion'), emp=document.getElementById('empleado');
+  function fill(){
+    const lista=data[ub.value]||[];
+    emp.replaceChildren();
+    const first=document.createElement('option'); first.value='';
+    first.textContent=ub.value?'Selecciona a la persona responsable':'Primero elige una ubicación';
+    emp.appendChild(first);
+    lista.forEach(e=>{
+      const o=document.createElement('option'); o.value=e.id;
+      o.textContent=e.nombre+' · No. trabajador '+e.trabajador+' — '+(e.pendientes===0?'verificado':e.verificados+'/'+e.total+' verificados');
+      if(e.pendientes===0) o.disabled=true;
+      if(String(e.id)===oldEmp) o.selected=true;
+      emp.appendChild(o);
+    });
+    emp.disabled=!ub.value;
+  }
+  ub.addEventListener('change',fill); fill();
+})();
+</script>
+@endif
+</div>
 @endsection

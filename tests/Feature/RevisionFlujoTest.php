@@ -109,7 +109,10 @@ class RevisionFlujoTest extends TestCase
         $rid = $this->iniciarResguardo($this->d['u1'], $this->d['juan']);
 
         $this->post("/revision/resguardos/$rid/cerrar", ['Observaciones' => str_repeat('a', 501)])->assertSessionHasErrors('Observaciones');
-        $this->post("/revision/resguardos/$rid/cerrar", ['Observaciones' => 'Monitor no localizado'])->assertRedirect("/resguardos/$rid/imprimir");
+        $this->post("/revision/resguardos/$rid/cerrar", ['Observaciones' => 'Aun sin escanear'])->assertSessionHasErrors('Observaciones'); // faltan artículos
+        $this->assertSame(0, DB::table('resguardos')->where('Id_Resguardo', $rid)->value('Cerrado'));
+        $this->postJson("/revision/resguardos/$rid/buscar", ['codigo' => 'INV-001'])->assertOk();
+        $this->post("/revision/resguardos/$rid/cerrar", ['Observaciones' => 'Todo localizado'])->assertRedirect("/resguardos/$rid/imprimir");
         $this->post("/revision/resguardos/$rid/cerrar")->assertForbidden();
         $this->postJson("/revision/resguardos/$rid/buscar", ['codigo' => 'INV-001'])->assertForbidden();
         $this->get("/resguardos/$rid/imprimir")->assertOk()->assertSee('Empleado responsable');
@@ -124,6 +127,7 @@ class RevisionFlujoTest extends TestCase
         $this->post("/revision/periodos/{$this->periodo}/cerrar");
         $this->assertSame('Abierto', DB::table('periodos')->where('Id_Periodo', $this->periodo)->value('Estado'));
 
+        $this->postJson("/revision/resguardos/$rid/buscar", ['codigo' => 'INV-001']);
         $this->post("/revision/resguardos/$rid/cerrar");
         $this->post("/revision/periodos/{$this->periodo}/cerrar");
         $this->assertSame('Cerrado', DB::table('periodos')->where('Id_Periodo', $this->periodo)->value('Estado'));
@@ -137,6 +141,43 @@ class RevisionFlujoTest extends TestCase
         $this->iniciarSesion('Administrador');
         $this->post("/revision/periodos/{$this->periodo}/reabrir");
         $this->assertSame('Abierto', DB::table('periodos')->where('Id_Periodo', $this->periodo)->value('Estado'));
+    }
+
+    public function test_selector_solo_muestra_ubicaciones_con_articulos_y_empleados_con_resguardo_ahi(): void
+    {
+        $this->preparar();
+        $d = $this->d;
+        $this->crearArticulo($d, 'INV-001', $d['u1'], $d['juan']);                                     // u1 -> juan
+        $this->crearArticulo($d, 'INV-002', $d['u2'], $d['ana'], null, ['status' => 'inactivo']);     // u2 solo tiene una baja
+
+        $resp = $this->get("/revision/periodos/{$this->periodo}/seleccionar")->assertOk();
+        $resp->assertSee('Laboratorio de Computo');
+        $resp->assertDontSee('Direccion');                       // ubicación sin artículos activos no aparece
+        $this->assertSame([$d['u1']], $resp->viewData('ubicaciones')->pluck('Id_Ubicacion')->all());
+        $porUbicacion = $resp->viewData('empleadosPorUbicacion');
+        $this->assertSame([$d['juan']], array_column($porUbicacion[$d['u1']], 'id')); // ana y luis no aparecen
+    }
+
+    public function test_no_se_cierra_el_periodo_si_hay_ubicaciones_sin_verificar(): void
+    {
+        $this->preparar();
+        $d = $this->d;
+        $this->crearArticulo($d, 'INV-001', $d['u1'], $d['juan']);
+        $this->crearArticulo($d, 'INV-002', $d['u2'], $d['ana']);   // ubicación que nadie revisó
+
+        $rid = $this->iniciarResguardo($d['u1'], $d['juan']);
+        $this->postJson("/revision/resguardos/$rid/buscar", ['codigo' => 'INV-001']);
+        $this->post("/revision/resguardos/$rid/cerrar");
+
+        $this->post("/revision/periodos/{$this->periodo}/cerrar")->assertSessionHasErrors('clave');
+        $this->assertSame('Abierto', DB::table('periodos')->where('Id_Periodo', $this->periodo)->value('Estado'));
+
+        $rid2 = $this->iniciarResguardo($d['u2'], $d['ana']);
+        $this->postJson("/revision/resguardos/$rid2/buscar", ['codigo' => 'INV-002']);
+        $this->post("/revision/resguardos/$rid2/cerrar");
+
+        $this->post("/revision/periodos/{$this->periodo}/cerrar");
+        $this->assertSame('Cerrado', DB::table('periodos')->where('Id_Periodo', $this->periodo)->value('Estado'));
     }
 
     public function test_la_pantalla_de_escaneo_trae_layout_completo_script_cerrado_y_captura_manual(): void
